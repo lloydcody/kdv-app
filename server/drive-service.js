@@ -15,6 +15,7 @@ export class DriveService {
       key: config.credentials.private_key,
       scopes: ['https://www.googleapis.com/auth/drive.readonly']
     });
+
     this.drive = google.drive({ version: 'v3', auth: this.auth });
   }
 
