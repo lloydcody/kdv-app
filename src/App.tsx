@@ -1,34 +1,75 @@
 import React, { useState, useEffect } from 'react';
-import { FileGrid } from './components/FileGrid';
-import { InstanceOverlay } from './components/InstanceOverlay';
+import { AnimatePresence, motion } from 'framer-motion';
+import { HomeScreen } from './components/HomeScreen';
+import { LoadingScreen } from './components/LoadingScreen';
+import { IdleScreen } from './components/IdleScreen';
 import { PreviewScreen } from './components/PreviewScreen';
+import { UpdateToast } from './components/UpdateToast';
 import { useInstanceInfo } from './hooks/useInstanceInfo';
+import { useInactivityTimer } from './hooks/useInactivityTimer';
 import { listFiles } from './services/api';
+import { getKioskFiles, getTagsFromHash } from './utils/fileUtils';
 import type { DriveFile } from './types/drive';
+
+type AppState = 'loading' | 'idle' | 'home';
 
 export default function App() {
   const instanceInfo = useInstanceInfo();
+  const [appState, setAppState] = useState<AppState>('loading');
   const [files, setFiles] = useState<DriveFile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [displayFiles, setDisplayFiles] = useState<DriveFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<DriveFile | null>(null);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+
+  useInactivityTimer(() => {
+    setAppState('idle');
+    setSelectedFile(null);
+  });
 
   useEffect(() => {
     loadFiles();
+    
+    const interval = setInterval(async () => {
+      setIsCheckingUpdates(true);
+      await loadFiles();
+      setIsCheckingUpdates(false);
+    }, 10 * 60 * 1000);
+    
+    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const tags = getTagsFromHash();
+      setDisplayFiles(getKioskFiles(files, tags));
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange();
+
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [files]);
 
   async function loadFiles() {
     try {
-      setLoading(true);
       const fileList = await listFiles();
       setFiles(fileList);
+      const tags = getTagsFromHash();
+      setDisplayFiles(getKioskFiles(fileList, tags));
     } catch (err) {
       setError('Failed to load files');
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   }
+
+  const handleLoadingComplete = () => {
+    setAppState('idle');
+  };
+
+  const handleDismissIdle = () => {
+    setAppState('home');
+  };
 
   const handleFileSelect = (file: DriveFile) => {
     setSelectedFile(file);
@@ -38,38 +79,62 @@ export default function App() {
     setSelectedFile(null);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-white text-xl">Loading files...</p>
-      </div>
-    );
-  }
+  const handleLogoClick = () => {
+    setAppState('idle');
+    setSelectedFile(null);
+  };
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-red-500 text-xl">{error}</p>
+      <div className="min-h-screen bg-gradient-to-b from-[#1E3A8A] to-[#0D1B45] flex items-center justify-center">
+        <p className="text-red-500 text-xl text-center">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="relative min-h-screen">
-        <div className="p-8">
-          <div className="max-w-7xl mx-auto">
-            <FileGrid files={files} onFileSelect={handleFileSelect} />
-            {instanceInfo && <InstanceOverlay instanceInfo={instanceInfo} />}
-          </div>
-        </div>
-        {selectedFile && (
-          <PreviewScreen
-            file={selectedFile}
-            onClose={handleClose}
-          />
+    <div className="relative">
+      <AnimatePresence mode="wait">
+        {appState === 'loading' && (
+          <LoadingScreen key="loading-screen" onLoadingComplete={handleLoadingComplete} />
         )}
-      </div>
+        
+        {appState === 'idle' && (
+          <IdleScreen key="idle-screen" onDismiss={handleDismissIdle} files={files} />
+        )}
+        
+        {appState === 'home' && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="relative"
+            style={{ zIndex: selectedFile ? 0 : 1 }}
+          >
+            <HomeScreen
+              key="home-screen"
+              files={displayFiles}
+              onFileSelect={handleFileSelect}
+              onLogoClick={handleLogoClick}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedFile && (
+          <div className="relative" style={{ zIndex: 2 }}>
+            <PreviewScreen
+              key={`preview-${selectedFile.id}`}
+              file={selectedFile}
+              onClose={handleClose}
+            />
+          </div>
+        )}
+      </AnimatePresence>
+
+      <UpdateToast visible={isCheckingUpdates} />
     </div>
   );
 }

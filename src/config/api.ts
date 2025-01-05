@@ -1,3 +1,4 @@
+// API configuration constants
 export const API_CONFIG = {
-  baseUrl: 'https://document-viewer-api.onrender.com/api'
+  baseUrl: 'https://kdv-gdriveproxy.onrender.com/api'
 };

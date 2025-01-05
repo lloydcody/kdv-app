@@ -1,8 +1,10 @@
-import React, { useEffect, useCallback } from 'react';
-import { Home } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { ImagePreview } from './previews/ImagePreview';
 import { VideoPreview } from './previews/VideoPreview';
 import { PDFPreview } from './previews/PDFPreview';
+import { BottomBar } from './previews/BottomBar';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import type { DriveFile } from '../types/drive';
 
 interface Props {
@@ -11,53 +13,51 @@ interface Props {
 }
 
 export function PreviewScreen({ file, onClose }: Props) {
-  const handleKeyPress = useCallback((event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      onClose();
-    }
-  }, [onClose]);
+  const [controls, setControls] = useState<any>({});
 
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyPress);
-    return () => {
-      document.removeEventListener('keydown', handleKeyPress);
-    };
-  }, [handleKeyPress]);
+  useEscapeKey(onClose);
+
+  const handleControlsChange = useCallback((newControls: any) => {
+    setControls(prev => ({ ...prev, ...newControls }));
+  }, []);
 
   const renderPreview = () => {
     if (file.mimeType.startsWith('image/')) {
-      return <ImagePreview file={file} />;
+      return <ImagePreview file={file} onControlsChange={handleControlsChange} />;
     }
     if (file.mimeType.startsWith('video/')) {
-      return <VideoPreview file={file} />;
+      return <VideoPreview file={file} onControlsChange={handleControlsChange} onClose={onClose} />;
     }
     if (file.mimeType === 'application/pdf') {
-      return <PDFPreview file={file} />;
+      return <PDFPreview file={file} onControlsChange={handleControlsChange} />;
     }
     return null;
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900 flex flex-col">
-      <div className="flex-1 relative">
-        <div className="absolute inset-0 flex items-center justify-center">
+    <motion.div
+      layoutId={`file-${file.id}`}
+      style={{ 
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100
+      }}
+      className="bg-gradient-to-b from-[#1E3A8A] to-[#0D1B45] flex flex-col"
+      transition={{ 
+        layout: { duration: 0.3 },
+        opacity: { duration: 0.3 }
+      }}
+    >
+      <div className="flex-1 p-8 pb-4">
+        <div className="w-full h-full bg-black/30 backdrop-blur-sm rounded-2xl overflow-hidden">
           {renderPreview()}
         </div>
       </div>
-      <div className="h-32 bg-gray-800 border-t border-gray-700 flex items-center px-8">
-        <div className="flex-1 flex items-center">
-          <button
-            onClick={onClose}
-            className="bg-white text-gray-900 rounded-full p-3 hover:bg-gray-200 transition-colors"
-          >
-            <Home className="w-6 h-6" />
-          </button>
-        </div>
-        <div className="flex-[2] flex justify-center">
-          {/* Preview controls are rendered within each preview component */}
-        </div>
-        <div className="flex-1" />
-      </div>
-    </div>
+      <BottomBar
+        file={file}
+        onClose={onClose}
+        controls={controls}
+      />
+    </motion.div>
   );
 }

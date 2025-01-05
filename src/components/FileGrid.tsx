@@ -1,5 +1,7 @@
 import React from 'react';
-import { FileIcon, Film, Image } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ThumbnailImage } from './ThumbnailImage';
+import { formatDisplayName } from '../utils/fileUtils';
 import type { DriveFile } from '../types/drive';
 
 interface Props {
@@ -7,38 +9,41 @@ interface Props {
   onFileSelect: (file: DriveFile) => void;
 }
 
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith('image/')) return <Image className="w-12 h-12" />;
-  if (mimeType.startsWith('video/')) return <Film className="w-12 h-12" />;
-  return <FileIcon className="w-12 h-12" />;
-}
-
-function isAllowedFileType(mimeType: string): boolean {
-  return (
-    mimeType.startsWith('image/') ||
-    mimeType.startsWith('video/') ||
-    mimeType === 'application/pdf'
-  );
-}
-
 export function FileGrid({ files, onFileSelect }: Props) {
-  const allowedFiles = files.filter(file => isAllowedFileType(file.mimeType));
-
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-      {allowedFiles.map((file) => (
-        <button
+    <div className="grid grid-cols-5 gap-12">
+      {files.map((file) => (
+        <motion.button
           key={file.id}
+          layoutId={`file-${file.id}`}
           onClick={() => onFileSelect(file)}
-          className="group aspect-video bg-gray-800 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-gray-700 transition-colors text-white"
+          style={{ 
+            borderRadius: 20,
+            position: 'relative',
+            zIndex: 1
+          }}
+          whileHover={{ 
+            scale: 1.05,
+            zIndex: 2,
+            transition: { duration: 0.3 }
+          }}
+          className="group relative bg-gradient-to-br from-[#B8860B] to-[#DAA520] overflow-hidden aspect-[2/1.2] shadow-[0_8px_16px_rgba(0,0,0,0.3)]"
+          transition={{
+            layout: { duration: 0.3, ease: "easeInOut" }
+          }}
         >
-          <div className="mb-2 text-gray-300 group-hover:text-white transition-colors">
-            {getFileIcon(file.mimeType)}
+          {/* Thumbnail Section */}
+          <div className="absolute inset-x-0 top-0 h-[75%] overflow-hidden">
+            <ThumbnailImage file={file} />
           </div>
-          <p className="text-sm text-center truncate w-full">
-            {file.name}
-          </p>
-        </button>
+
+          {/* Title Section */}
+          <div className="absolute inset-x-0 bottom-0 h-[25%] bg-gradient-to-t from-[#5E5538] to-[#90845C] flex items-center px-4">
+            <p className="text-white text-sm font-normal truncate">
+              {formatDisplayName(file.name)}
+            </p>
+          </div>
+        </motion.button>
       ))}
     </div>
   );

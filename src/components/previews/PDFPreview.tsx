@@ -1,97 +1,121 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import { API_CONFIG } from '../../config/apiConfig';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
+import { PreviewContainer } from './PreviewContainer';
+import { usePreviewSize } from '../../hooks/usePreviewSize';
+import { usePDFCache } from '../../hooks/usePDFCache';
 import type { DriveFile } from '../../types/drive';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 interface Props {
   file: DriveFile;
+  onControlsChange: (controls: any) => void;
 }
 
-export function PDFPreview({ file }: Props) {
+export function PDFPreview({ file, onControlsChange }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
-  const [scale, setScale] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [direction, setDirection] = useState<'next' | 'prev'>('next');
+  const size = usePreviewSize(containerRef);
+  const { pdfUrl, loadPDF } = usePDFCache();
 
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    // Start with a zoomed out view
-    setScale(0.8);
-  };
+  useEffect(() => {
+    loadPDF(file.id);
+  }, [file.id, loadPDF]);
+
+  useEffect(() => {
+    onControlsChange({
+      pagination: {
+        currentPage: pageNumber,
+        totalPages: numPages,
+        onPrevPage: () => {
+          if (pageNumber > 1) {
+            setDirection('prev');
+            setPageNumber(page => page - 1);
+          }
+        },
+        onNextPage: () => {
+          if (pageNumber < numPages) {
+            setDirection('next');
+            setPageNumber(page => page + 1);
+          }
+        }
+      }
+    });
+  }, [pageNumber, numPages, onControlsChange]);
+
+  if (!pdfUrl) return null;
 
   return (
-    <TransformWrapper
-      initialScale={0.8}
-      minScale={0.3}
-      maxScale={2}
-      centerOnInit
-      limitToBounds
-    >
-      {({ zoomIn, zoomOut, resetTransform }) => (
-        <>
-          <TransformComponent wrapperClass="w-full h-full" contentClass="h-full flex items-center justify-center">
-            <Document
-              file={`${API_CONFIG.baseUrl}/files/${file.id}/preview`}
-              onLoadSuccess={onDocumentLoadSuccess}
-              className="flex justify-center"
+    <PreviewContainer ref={containerRef}>
+      <div className="relative flex items-center justify-center h-full max-h-full overflow-hidden">
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </motion.div>
+        )}
+        
+        <Document
+          file={pdfUrl}
+          onLoadSuccess={({ numPages }) => {
+            setNumPages(numPages);
+            setIsLoading(false);
+          }}
+          loading={null}
+          className="max-h-full"
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={pageNumber}
+              initial={{ opacity: 0, x: direction === 'next' ? 20 : -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: direction === 'next' ? -20 : 20 }}
+              transition={{ duration: 0.15 }}
+              className="max-h-full"
             >
               <Page
                 pageNumber={pageNumber}
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
-                scale={scale}
+                className="bg-transparent max-h-full"
+                width={size.width}
+                height={size.height}
               />
-            </Document>
-          </TransformComponent>
+            </motion.div>
+          </AnimatePresence>
           
-          <div className="absolute bottom-0 inset-x-0 h-32 flex items-center justify-center gap-8">
-            {numPages > 1 && (
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setPageNumber(page => Math.max(1, page - 1))}
-                  disabled={pageNumber <= 1}
-                  className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full disabled:opacity-50"
-                >
-                  <ChevronLeft className="w-6 h-6" />
-                </button>
-                <span className="text-white">
-                  {pageNumber} / {numPages}
-                </span>
-                <button
-                  onClick={() => setPageNumber(page => Math.min(numPages, page + 1))}
-                  disabled={pageNumber >= numPages}
-                  className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full disabled:opacity-50"
-                >
-                  <ChevronRight className="w-6 h-6" />
-                </button>
-              </div>
+          {/* Pre-render adjacent pages */}
+          <div className="hidden">
+            {pageNumber > 1 && (
+              <Page
+                pageNumber={pageNumber - 1}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                width={size.width}
+                height={size.height}
+              />
             )}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => zoomOut()}
-                className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
-              >
-                <ZoomOut className="w-6 h-6" />
-              </button>
-              <button
-                onClick={() => resetTransform()}
-                className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
-              >
-                <RotateCcw className="w-6 h-6" />
-              </button>
-              <button
-                onClick={() => zoomIn()}
-                className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
-              >
-                <ZoomIn className="w-6 h-6" />
-              </button>
-            </div>
+            {pageNumber < numPages && (
+              <Page
+                pageNumber={pageNumber + 1}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                width={size.width}
+                height={size.height}
+              />
+            )}
           </div>
-        </>
-      )}
-    </TransformWrapper>
+        </Document>
+      </div>
+    </PreviewContainer>
   );
 }

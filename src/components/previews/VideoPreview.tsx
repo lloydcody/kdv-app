@@ -1,113 +1,126 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
-import { API_CONFIG } from '../../config/apiConfig';
+import { useAudioFade } from '../../hooks/useAudioFade';
+import { usePreviewSize } from '../../hooks/usePreviewSize';
+import { getCachedFile } from '../../services/cacheService';
+import { PreviewContainer } from './PreviewContainer';
 import type { DriveFile } from '../../types/drive';
 
 interface Props {
   file: DriveFile;
+  onControlsChange: (controls: any) => void;
+  onClose: () => void;
 }
 
-export function VideoPreview({ file }: Props) {
+export function VideoPreview({ file, onControlsChange, onClose }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fadeRef = useRef<(() => void) | null>(null);
+  const [src, setSrc] = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<number>();
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [lastPosition, setLastPosition] = useState(0);
+  const fadeAudio = useAudioFade();
+  const size = usePreviewSize(containerRef, aspectRatio);
 
+  // Cleanup on unmount - fade out audio
   useEffect(() => {
     return () => {
-      if (videoRef.current) {
-        setLastPosition(videoRef.current.currentTime);
-        videoRef.current.pause();
+      if (videoRef.current && !videoRef.current.paused) {
+        fadeAudio(videoRef.current, false, 300);
       }
     };
-  }, []);
+  }, [fadeAudio]);
 
   useEffect(() => {
-    if (videoRef.current && lastPosition > 0) {
-      videoRef.current.currentTime = lastPosition;
-      if (isPlaying) {
-        videoRef.current.play();
+    getCachedFile(file.id).then(setSrc);
+  }, [file.id]);
+
+  useEffect(() => {
+    onControlsChange({
+      video: {
+        isPlaying,
+        isMuted,
+        progress,
+        onPlayPause: () => {
+          if (videoRef.current) {
+            if (isPlaying) {
+              if (fadeRef.current) fadeRef.current();
+              fadeRef.current = fadeAudio(videoRef.current, false, 300);
+              setTimeout(() => {
+                if (videoRef.current) {
+                  videoRef.current.pause();
+                  setIsPlaying(false);
+                }
+              }, 300);
+            } else {
+              videoRef.current.play();
+              if (fadeRef.current) fadeRef.current();
+              fadeRef.current = fadeAudio(videoRef.current, true, 300);
+              setIsPlaying(true);
+            }
+          }
+        },
+        onMuteToggle: () => {
+          if (videoRef.current) {
+            videoRef.current.muted = !isMuted;
+            setIsMuted(!isMuted);
+          }
+        },
+        onSeek: (e: React.MouseEvent<HTMLDivElement>, seekBar: HTMLDivElement) => {
+          if (videoRef.current) {
+            const rect = seekBar.getBoundingClientRect();
+            const position = (e.clientX - rect.left) / rect.width;
+            videoRef.current.currentTime = position * videoRef.current.duration;
+          }
+        }
       }
-    }
-  }, [lastPosition, isPlaying]);
+    });
+  }, [isPlaying, isMuted, progress, onControlsChange, fadeAudio]);
 
-  const togglePlay = () => {
+  const handleVideoLoad = () => {
     if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
+      setAspectRatio(videoRef.current.videoWidth / videoRef.current.videoHeight);
+      videoRef.current.volume = 0;
+      fadeRef.current = fadeAudio(videoRef.current, true, 300);
+      videoRef.current.play().catch(console.error);
     }
   };
 
-  const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      const progress = (videoRef.current.currentTime / videoRef.current.duration) * 100;
-      setProgress(progress);
-    }
-  };
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>, seekBar: HTMLDivElement) => {
-    if (videoRef.current) {
-      const rect = seekBar.getBoundingClientRect();
-      const position = (e.clientX - rect.left) / rect.width;
-      videoRef.current.currentTime = position * videoRef.current.duration;
-      setProgress(position * 100);
-    }
-  };
-
-  const handleEnded = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      setIsPlaying(false);
-    }
-  };
+  if (!src) return null;
 
   return (
-    <div className="w-full h-full flex items-center justify-center">
+    <PreviewContainer ref={containerRef}>
       <video
         ref={videoRef}
-        src={`${API_CONFIG.baseUrl}/files/${file.id}/preview`}
-        className="max-h-full max-w-full"
+        src={src}
+        className="object-contain"
+        style={{ width: size.width, height: size.height }}
         autoPlay
-        onTimeUpdate={handleTimeUpdate}
-        onEnded={handleEnded}
+        playsInline
+        muted={isMuted}
+        onLoadedMetadata={handleVideoLoad}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onTimeUpdate={() => {
+          if (videoRef.current) {
+            setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
+          }
+        }}
+        onEnded={() => {
+          if (videoRef.current) {
+            if (fadeRef.current) fadeRef.current();
+            fadeRef.current = fadeAudio(videoRef.current, false, 300);
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.currentTime = 0;
+                videoRef.current.pause();
+                setIsPlaying(false);
+              }
+            }, 300);
+          }
+        }}
       />
-      <div className="absolute bottom-0 inset-x-0 h-32 flex flex-col items-center justify-center gap-4">
-        <div 
-          className="w-96 h-2 bg-white/20 rounded cursor-pointer relative"
-          onClick={(e) => handleSeek(e, e.currentTarget)}
-        >
-          <div 
-            className="absolute top-0 left-0 h-full bg-white rounded"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={togglePlay}
-            className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
-          >
-            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-          </button>
-          <button
-            onClick={toggleMute}
-            className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
-          >
-            {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-          </button>
-        </div>
-      </div>
-    </div>
+    </PreviewContainer>
   );
 }
