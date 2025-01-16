@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-const INACTIVITY_TIMEOUT = 3 * 60 * 1000; // 3 minutes
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export function useInactivityTimer(onInactive: () => void) {
   useEffect(() => {
@@ -11,11 +11,13 @@ export function useInactivityTimer(onInactive: () => void) {
       timer = window.setTimeout(onInactive, INACTIVITY_TIMEOUT);
     };
 
+    // Reset timer on user interaction
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
     events.forEach(event => {
       document.addEventListener(event, resetTimer);
     });
 
+    // Start initial timer
     resetTimer();
 
     return () => {

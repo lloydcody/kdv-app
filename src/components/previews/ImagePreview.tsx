@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { getCachedFile } from '../../services/cacheService';
-import { PreviewContainer } from './PreviewContainer';
-import { usePreviewSize } from '../../hooks/usePreviewSize';
 import type { DriveFile } from '../../types/drive';
 
 interface Props {
@@ -11,30 +10,41 @@ interface Props {
 
 export function ImagePreview({ file, onControlsChange }: Props) {
   const [src, setSrc] = useState<string | null>(null);
-  const [aspectRatio, setAspectRatio] = useState<number>();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const size = usePreviewSize(containerRef, aspectRatio);
 
   useEffect(() => {
     getCachedFile(file.id).then(setSrc);
   }, [file.id]);
 
-  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    setAspectRatio(img.naturalWidth / img.naturalHeight);
-  };
-
   if (!src) return null;
 
   return (
-    <PreviewContainer ref={containerRef}>
-      <img
-        src={src}
-        alt={file.name}
-        className="object-contain"
-        style={{ width: size.width, height: size.height }}
-        onLoad={handleImageLoad}
-      />
-    </PreviewContainer>
+    <TransformWrapper
+      initialScale={1}
+      minScale={0.1}
+      maxScale={2}
+      centerOnInit
+      limitToBounds
+      onZoomChange={({ state }) => {
+        onControlsChange({
+          preview: {
+            onZoomIn: state.zoomIn,
+            onZoomOut: state.zoomOut,
+            onReset: state.resetTransform
+          }
+        });
+      }}
+    >
+      <TransformComponent
+        wrapperClass="w-full h-full"
+        contentClass="h-full flex items-center justify-center"
+      >
+        <img
+          src={src}
+          alt={file.name}
+          className="max-h-full max-w-full object-contain"
+          style={{ margin: 'auto' }}
+        />
+      </TransformComponent>
+    </TransformWrapper>
   );
 }

@@ -5,11 +5,11 @@ export function DateTime() {
   const { time, date } = useDateTime();
 
   return (
-    <div className="flex flex-col items-end">
-      <h1 className="text-[140px] font-[100] leading-[0.9] mb-4 text-[#AD9E6E]">
+    <div className="mb-6">
+      <h1 className="text-[96px] font-light text-gray-900 leading-none">
         {time}
       </h1>
-      <p className="text-[24px] text-gray-600 font-light pr-2">
+      <p className="text-2xl text-gray-600">
         {date}
       </p>
     </div>

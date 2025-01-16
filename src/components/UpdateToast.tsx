@@ -4,10 +4,9 @@ import { RefreshCw } from 'lucide-react';
 
 interface Props {
   visible: boolean;
-  status?: string;
 }
 
-export function UpdateToast({ visible, status }: Props) {
+export function UpdateToast({ visible }: Props) {
   return (
     <AnimatePresence>
       {visible && (
@@ -18,12 +17,7 @@ export function UpdateToast({ visible, status }: Props) {
           className="fixed bottom-4 right-4 bg-gray-800 text-white rounded-lg shadow-lg p-4 flex items-center gap-3"
         >
           <RefreshCw className="w-5 h-5 animate-spin" />
-          <div className="flex flex-col">
-            <span>Checking for updates...</span>
-            {status && (
-              <span className="text-sm text-gray-400">{status}</span>
-            )}
-          </div>
+          <span>Checking for updates...</span>
         </motion.div>
       )}
     </AnimatePresence>

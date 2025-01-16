@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,26 +8,4 @@
   html {
     font-family: 'Poppins', sans-serif;
   }
-  
-  body {
-    width: 1920px;
-    height: 1080px;
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
-  }
-}
-
-.ultra-light {
-  font-weight: 200;
-}
-
-/* Hide scrollbar but keep functionality */
-.scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari and Opera */
 }
