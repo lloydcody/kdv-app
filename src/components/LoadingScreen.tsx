@@ -9,6 +9,7 @@ interface Props {
 }
 
 export function LoadingScreen({ onLoadingComplete }: Props) {
+  const [status, setStatus] = useState('Initializing...');
   const [progress, setProgress] = useState(0);
   const [currentFile, setCurrentFile] = useState('');
   const [remaining, setRemaining] = useState(0);
@@ -26,6 +27,9 @@ export function LoadingScreen({ onLoadingComplete }: Props) {
       const update = event.data;
       
       switch (update.type) {
+        case 'status':
+          setStatus(update.message);
+          break;
         case 'progress':
           setProgress(update.progress);
           setCurrentFile(update.fileName);
@@ -68,6 +72,7 @@ export function LoadingScreen({ onLoadingComplete }: Props) {
   }, [worker]);
 
   const formatSpeed = (bytesPerSecond: number) => {
+    if (bytesPerSecond === 0) return '';
     const mbps = bytesPerSecond / (1024 * 1024);
     return `${mbps.toFixed(1)} MB/s`;
   };
@@ -104,12 +109,19 @@ export function LoadingScreen({ onLoadingComplete }: Props) {
         </div>
         
         <div className="space-y-1">
-          <p className="text-white text-center truncate">
-            {currentFile}
+          <p className="text-white text-center">
+            {status}
           </p>
-          <p className="text-gray-300 text-sm text-center">
-            {remaining} files remaining
-          </p>
+          {currentFile && (
+            <>
+              <p className="text-white text-center truncate">
+                {currentFile}
+              </p>
+              <p className="text-gray-300 text-sm text-center">
+                {remaining} files remaining
+              </p>
+            </>
+          )}
         </div>
       </div>
     </motion.div>

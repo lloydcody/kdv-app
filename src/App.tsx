@@ -5,11 +5,15 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { IdleScreen } from './components/IdleScreen';
 import { PreviewScreen } from './components/PreviewScreen';
 import { UpdateToast } from './components/UpdateToast';
+import { InactivityIndicator } from './components/InactivityIndicator';
 import { useInstanceInfo } from './hooks/useInstanceInfo';
 import { useInactivityTimer } from './hooks/useInactivityTimer';
 import { listFiles } from './services/api';
 import { getKioskFiles, getTagsFromHash } from './utils/fileUtils';
 import type { DriveFile } from './types/drive';
+import type { WorkerUpdate } from './types/worker';
+
+const INACTIVITY_TIMEOUT = 3 * 60 * 1000; // 3 minutes
 
 type AppState = 'loading' | 'idle' | 'home';
 
@@ -21,6 +25,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<DriveFile | null>(null);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string>('');
 
   useInactivityTimer(() => {
     setAppState('idle');
@@ -84,6 +89,13 @@ export default function App() {
     setSelectedFile(null);
   };
 
+  const handleWorkerMessage = (event: MessageEvent<WorkerUpdate>) => {
+    const update = event.data;
+    if (update.type === 'status') {
+      setUpdateStatus(update.message);
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#1E3A8A] to-[#0D1B45] flex items-center justify-center">
@@ -134,7 +146,12 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <UpdateToast visible={isCheckingUpdates} />
+      <UpdateToast 
+        visible={isCheckingUpdates} 
+        status={updateStatus}
+      />
+
+      <InactivityIndicator timeoutDuration={INACTIVITY_TIMEOUT} />
     </div>
   );
 }
