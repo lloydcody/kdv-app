@@ -1,3 +1,8 @@
+export interface StatusUpdate {
+  type: 'status';
+  message: string;
+}
+
 export interface ProgressUpdate {
   type: 'progress';
   fileName: string;
@@ -15,4 +20,4 @@ export interface ErrorUpdate {
   message: string;
 }
 
-export type WorkerUpdate = ProgressUpdate | CompleteUpdate | ErrorUpdate;
+export type WorkerUpdate = StatusUpdate | ProgressUpdate | CompleteUpdate | ErrorUpdate;

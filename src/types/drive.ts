@@ -6,8 +6,9 @@ export interface DriveFile {
   parentId: string;
   hasThumbnail: boolean;
   thumbnailUrl?: string;
-  type: 'file' | 'folder';
+  type: 'file' | 'folder' | 'embedded';
   children?: DriveFile[];
+  embeddedUrl?: string;
 }
 
 export interface FileFolder {

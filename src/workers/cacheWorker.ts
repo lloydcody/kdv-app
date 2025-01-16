@@ -11,15 +11,51 @@ async function initialize() {
 
 initialize();
 
-self.onmessage = async (event: MessageEvent<DriveFile[]>) => {
-  const files = getFilesToCache(event.data);
-  let remaining = files.length;
+self.onmessage = async (event: MessageEvent<{ files: DriveFile[]; tags: string[] }>) => {
+  const { files, tags } = event.data;
+  
+  // Send initial status
+  self.postMessage({
+    type: 'status',
+    message: 'Analyzing files...'
+  } as WorkerUpdate);
+
+  const filesToCache = getFilesToCache(files, tags);
+  let remaining = filesToCache.length;
   let processed = 0;
   let totalSpeed = 0;
+  let needsUpdateCount = 0;
   
-  for (const file of files) {
+  // First check which files need updating
+  for (const file of filesToCache) {
+    self.postMessage({
+      type: 'status',
+      message: `Checking file: ${file.name}`
+    } as WorkerUpdate);
+
+    const needsDownload = await needsUpdate(file);
+    if (needsDownload) {
+      needsUpdateCount++;
+    }
+  }
+
+  if (needsUpdateCount === 0) {
+    self.postMessage({
+      type: 'status',
+      message: 'All files up to date'
+    } as WorkerUpdate);
+    self.postMessage({ type: 'complete' } as WorkerUpdate);
+    return;
+  }
+
+  self.postMessage({
+    type: 'status',
+    message: `Downloading ${needsUpdateCount} files...`
+  } as WorkerUpdate);
+  
+  // Then download files that need updating
+  for (const file of filesToCache) {
     try {
-      // Check if file needs updating
       const needsDownload = await needsUpdate(file);
       
       if (needsDownload) {
@@ -35,7 +71,7 @@ self.onmessage = async (event: MessageEvent<DriveFile[]>) => {
         fileName: file.name,
         remaining,
         speed: totalSpeed / processed,
-        progress: (processed / files.length) * 100
+        progress: (processed / filesToCache.length) * 100
       } as WorkerUpdate);
     } catch (error) {
       console.error('Error processing file:', error);

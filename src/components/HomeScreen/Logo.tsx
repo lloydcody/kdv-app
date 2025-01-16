@@ -1,25 +1,35 @@
 import React, { useState, useEffect } from 'react';
+import { API_CONFIG } from '../../config/apiConfig';
 import { getCachedFile } from '../../services/cacheService';
-import { findFolderByPath } from '../../utils/fileUtils';
-import type { DriveFile } from '../../types/drive';
 
 interface Props {
-  files: DriveFile[];
+  onLogoClick: () => void;
 }
 
-export function Logo({ files }: Props) {
-  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+export function Logo({ onLogoClick }: Props) {
+  const [logoSrc, setLogoSrc] = useState<string | null>(
+    `${API_CONFIG.baseUrl}/files/1WGBVSOENi2tb9eolICE_B5PMEv3XKsHa/preview`
+  );
+  const logoId = '1WGBVSOENi2tb9eolICE_B5PMEv3XKsHa';
 
   useEffect(() => {
-    const logoFolder = findFolderByPath(files, ['Settings', 'Logo']);
-    if (logoFolder?.children?.[0]) {
-      getCachedFile(logoFolder.children[0].id).then(setLogoSrc);
-    }
-  }, [files]);
-
-  if (!logoSrc) return null;
+    getCachedFile(logoId).then(cachedSrc => {
+      if (cachedSrc) {
+        setLogoSrc(cachedSrc);
+      }
+    });
+  }, []);
 
   return (
-    <img src={logoSrc} alt="Logo" className="h-12 object-contain" />
+    <button 
+      onClick={onLogoClick}
+      className="border-0 bg-transparent p-0"
+    >
+      <img 
+        src={logoSrc}
+        alt="Logo" 
+        className="h-[80px] object-contain pl-5"
+      />
+    </button>
   );
 }

@@ -9,18 +9,79 @@ export function isAllowedFileType(mimeType: string): boolean {
 }
 
 export function findFolderByPath(files: DriveFile[], path: string[]): DriveFile | null {
-  let current: DriveFile | undefined = files.find(f => f.name === path[0]);
+  let current: DriveFile | undefined;
   
+  // First find the root folder
+  for (const file of files) {
+    if (file.name === path[0] && file.type === 'folder') {
+      current = file;
+      break;
+    }
+  }
+  
+  // Then traverse down the path
   for (let i = 1; i < path.length && current?.children; i++) {
-    current = current.children.find(f => f.name === path[i]);
+    const next = current.children.find(f => f.name === path[i] && f.type === 'folder');
+    if (!next) return null;
+    current = next;
   }
   
   return current || null;
 }
 
-export function getDefaultKioskFiles(files: DriveFile[]): DriveFile[] {
-  const kioskDocs = findFolderByPath(files, ['Kiosk Documents', 'Default']);
-  return kioskDocs?.children || [];
+export function getTagsFromHash(): string[] {
+  const hash = window.location.hash;
+  if (!hash) return [];
+  
+  const tagsMatch = hash.match(/#tags=([^&]+)/);
+  if (!tagsMatch) return [];
+  
+  return tagsMatch[1].split(',').map(tag => tag.trim());
+}
+
+export function getKioskFiles(files: DriveFile[], tags: string[]): DriveFile[] {
+  // Create embedded menu items first
+  const embeddedItems: DriveFile[] = [
+    {
+      id: 'staff-directory',
+      name: 'Staff Directory',
+      type: 'embedded',
+      mimeType: 'embedded/iframe',
+      embeddedUrl: 'https://kdv-directory.netlify.app/',
+      path: [],
+      parentId: '',
+      hasThumbnail: false
+    },
+    {
+      id: 'announcements',
+      name: 'Announcements',
+      type: 'embedded',
+      mimeType: 'embedded/iframe',
+      embeddedUrl: 'https://kdv-announcements.netlify.app/',
+      path: [],
+      parentId: '',
+      hasThumbnail: false
+    }
+  ];
+
+  const defaultFolder = findFolderByPath(files, ['Kiosk Documents', 'Default']);
+  const defaultFiles = defaultFolder?.children || [];
+
+  // Get files from tagged folders
+  const taggedFiles = tags.reduce((acc: DriveFile[], tag) => {
+    const tagFolder = findFolderByPath(files, ['Kiosk Documents', tag]);
+    if (tagFolder?.children) {
+      acc.push(...tagFolder.children);
+    }
+    return acc;
+  }, []);
+
+  // Combine and deduplicate files based on name
+  const allFiles = [...defaultFiles, ...taggedFiles];
+  const uniqueFiles = Array.from(new Map(allFiles.map(file => [file.name, file])).values());
+
+  // Return embedded items first, followed by sorted content files
+  return [...embeddedItems, ...sortFiles(uniqueFiles)];
 }
 
 export function getDefaultIdleFiles(files: DriveFile[]): DriveFile[] {
@@ -31,8 +92,15 @@ export function getDefaultIdleFiles(files: DriveFile[]): DriveFile[] {
   return imageFiles;
 }
 
-export function getFilesToCache(files: DriveFile[]): DriveFile[] {
-  const kioskFiles = getDefaultKioskFiles(files);
+export function formatDisplayName(fileName: string): string {
+  // Remove file extension
+  const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+  // Replace underscores with spaces and remove any ordering prefix (e.g., "01 - ")
+  return nameWithoutExt.replace(/^\d+\s*-\s*/, '').replace(/_/g, ' ');
+}
+
+export function getFilesToCache(files: DriveFile[], tags: string[]): DriveFile[] {
+  const kioskFiles = getKioskFiles(files, tags);
   const idleFiles = getDefaultIdleFiles(files);
   const filesToCache = [...kioskFiles, ...idleFiles];
   
@@ -48,15 +116,8 @@ export function getFilesToCache(files: DriveFile[]): DriveFile[] {
   return [...filesToCache, ...thumbnailFiles];
 }
 
-export function formatDisplayName(fileName: string): string {
-  // Remove file extension
-  const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
-  // Replace underscores with spaces
-  return nameWithoutExt.replace(/_/g, ' ');
-}
-
 export function getFileOrder(fileName: string): number {
-  const match = fileName.match(/^(\d+)\s-\s/);
+  const match = fileName.match(/^(\d+)\s*-\s*/);
   return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
 }
 

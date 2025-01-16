@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { getCachedFile } from '../../services/cacheService';
+import { Loader2 } from 'lucide-react';
+import { PreviewContainer } from './PreviewContainer';
+import { usePreviewSize } from '../../hooks/usePreviewSize';
+import { usePDFCache } from '../../hooks/usePDFCache';
 import type { DriveFile } from '../../types/drive';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
@@ -12,65 +16,100 @@ interface Props {
 }
 
 export function PDFPreview({ file, onControlsChange }: Props) {
-  const [src, setSrc] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
-  const [scale, setScale] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [direction, setDirection] = useState<'next' | 'prev'>('next');
+  const size = usePreviewSize(containerRef);
+  const { pdfUrl, loadPDF } = usePDFCache();
 
   useEffect(() => {
-    getCachedFile(file.id).then(setSrc);
-  }, [file.id]);
+    loadPDF(file.id);
+  }, [file.id, loadPDF]);
 
   useEffect(() => {
     onControlsChange({
       pagination: {
         currentPage: pageNumber,
         totalPages: numPages,
-        onPrevPage: () => setPageNumber(page => Math.max(1, page - 1)),
-        onNextPage: () => setPageNumber(page => Math.min(numPages, page + 1))
+        onPrevPage: () => {
+          if (pageNumber > 1) {
+            setDirection('prev');
+            setPageNumber(page => page - 1);
+          }
+        },
+        onNextPage: () => {
+          if (pageNumber < numPages) {
+            setDirection('next');
+            setPageNumber(page => page + 1);
+          }
+        }
       }
     });
   }, [pageNumber, numPages, onControlsChange]);
 
-  if (!src) return null;
+  if (!pdfUrl) return null;
 
   return (
-    <TransformWrapper
-      initialScale={0.8}
-      minScale={0.8}
-      maxScale={2}
-      centerOnInit
-      limitToBounds
-      onZoomChange={({ state }) => {
-        onControlsChange({
-          preview: {
-            onZoomIn: state.zoomIn,
-            onZoomOut: state.zoomOut,
-            onReset: state.resetTransform
-          }
-        });
-      }}
-    >
-      <TransformComponent
-        wrapperClass="w-full h-full flex items-center justify-center"
-        contentClass="h-full flex items-center justify-center"
-      >
+    <PreviewContainer ref={containerRef}>
+      <div className="relative flex items-center justify-center h-full max-h-full overflow-hidden">
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </motion.div>
+        )}
+        
         <Document
-          file={src}
+          file={pdfUrl}
           onLoadSuccess={({ numPages }) => {
             setNumPages(numPages);
-            setScale(0.8);
+            setIsLoading(false);
           }}
-          className="flex justify-center items-center"
+          loading={null}
+          className="max-h-full"
         >
-          <Page
-            pageNumber={pageNumber}
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
-            scale={scale}
-          />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={pageNumber}
+              initial={{ opacity: 0, x: direction === 'next' ? 20 : -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: direction === 'next' ? -20 : 20 }}
+              transition={{ duration: 0.15 }}
+              className="max-h-full"
+            >
+              <TransformWrapper
+                initialScale={1}
+                minScale={1}
+                maxScale={4}
+                centerOnInit
+                limitToBounds
+                wheel={{ disabled: true }}
+                doubleClick={{ disabled: true }}
+                panning={{ velocityDisabled: true }}
+              >
+                <TransformComponent
+                  wrapperStyle={{ width: '100%', height: '100%' }}
+                >
+                  <Page
+                    pageNumber={pageNumber}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    className="bg-transparent max-h-full"
+                    width={size.width}
+                    height={size.height}
+                  />
+                </TransformComponent>
+              </TransformWrapper>
+            </motion.div>
+          </AnimatePresence>
         </Document>
-      </TransformComponent>
-    </TransformWrapper>
+      </div>
+    </PreviewContainer>
   );
 }
